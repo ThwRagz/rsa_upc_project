@@ -72,6 +72,41 @@ def texto_a_numeros(texto):
 def numeros_a_texto(numeros):
     return "".join(TABLA_INVERSA.get(numero, "?") for numero in numeros)
 
+def validar_rango_tabla(valor, tipo="valor"):
+    maximo_tabla = max(TABLA_INVERSA.keys())
+
+    if valor > maximo_tabla:
+        print("\nError:")
+        print(f"El {tipo} = {valor} supera el rango de la tabla de equivalencia.")
+        print(f"La tabla solo llega hasta {maximo_tabla}.")
+        print("Los primos seleccionados generan valores demasiado grandes.")
+        print("Elija otros primos más pequeños.")
+        return False
+
+    return True
+
+def validar_primos_para_tabla(n):
+    maximo_tabla = max(TABLA_INVERSA.keys())
+
+    if n > maximo_tabla:
+        print("\nError:")
+        print(
+            "Los números primos ingresados generan "
+            "valores de cifrado demasiado grandes."
+        )
+
+        print(
+            f"La tabla de equivalencia solo soporta "
+            f"valores hasta {maximo_tabla}."
+        )
+
+        print(
+            "Ingrese otros números primos más pequeños."
+        )
+
+        return False
+
+    return True
 
 def proceso_encriptacion():
     separador("PROCESO DE ENCRIPTACIÓN RSA")
@@ -93,7 +128,8 @@ def proceso_encriptacion():
 
     n = p * q
     phi = (p - 1) * (q - 1)
-
+    if not validar_primos_para_tabla(n):
+        return
     mensaje_numerico = texto_a_numeros(texto)
 
     for m in mensaje_numerico:
@@ -196,7 +232,9 @@ def proceso_desencriptacion():
 
     n = p * q
     phi = (p - 1) * (q - 1)
-
+    if not validar_primos_para_tabla(n):
+        return
+    
     mensaje_cifrado_numerico = texto_a_numeros(texto_cifrado)
 
     for c in mensaje_cifrado_numerico:
