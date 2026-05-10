@@ -1,253 +1,309 @@
-# !!!ESTE ARCHIVO CONTIENE SOLO UI!!!
-# (menu, input, output)
+from core.math_utils import is_prime, gcd, mod_inverse, mod_pow
+from core.rsa_engine import TABLA, TABLA_INVERSA
+import random
 
-from core.rsa_engine import RSAEngine
-from core.math_utils import is_prime
-import os
-
-# ----------------
-# output formating
-# ----------------
-
-def limpiar_pantalla():
-    os.system('cls' if os.name == 'nt' else 'clear')
 
 def separador(titulo=""):
-    linea = "=" * 50
+    print("\n" + "=" * 70)
     if titulo:
-        print(f"\n{linea}")
-        print(f"  {titulo}")
-        print(f"{linea}")
-    else:
-        print(linea)
+        print(titulo)
+        print("=" * 70)
+
 
 def pausar():
-    input("\n  Presiona Enter para continuar...")
+    input("\nPresiona Enter para continuar...")
 
 
 def pedir_primo(nombre):
-    # try/catch para input
     while True:
         try:
-            valor = int(input(f"  Ingresa el primo {nombre}: "))
+            valor = int(input(f"Ingrese el número primo {nombre} de 1 o 2 cifras: "))
+
+            if valor < 2 or valor > 99:
+                print("Debe ingresar un número primo de 1 o 2 cifras.")
+                continue
 
             if not is_prime(valor):
-                print(f"  {valor} no es primo, intenta con otro")
+                print(f"{valor} no es primo. Corrija el valor.")
                 continue
 
             return valor
 
         except ValueError:
-            print("  eso no es un numero, intentalo de nuevo")
+            print("Entrada inválida. Ingrese un número entero.")
 
-# -------------
-# menu opciones
-# -------------
 
-def opcion_generar_claves(estado):
-    separador("GENERAR CLAVES RSA")
-    print("\n  necesitamos dos primos distintos, p y q\n")
+def validar_texto(texto):
+    if not texto.strip():
+        return False
+
+    texto = texto.upper()
+
+    for caracter in texto:
+        if caracter not in TABLA:
+            return False
+
+    return True
+
+
+def obtener_posibles_d(phi):
+    return [d for d in range(2, phi) if gcd(d, phi) == 1]
+
+
+def guardar_txt(contenido):
+    nombre = input("Nombre del archivo TXT: ").strip()
+
+    if not nombre:
+        nombre = "mensaje_encriptado"
+
+    if not nombre.endswith(".txt"):
+        nombre += ".txt"
+
+    with open(nombre, "w", encoding="utf-8") as archivo:
+        archivo.write(contenido)
+
+    print(f"\nArchivo guardado correctamente como: {nombre}")
+
+
+def texto_a_numeros(texto):
+    return [TABLA[caracter] for caracter in texto.upper()]
+
+
+def numeros_a_texto(numeros):
+    return "".join(TABLA_INVERSA.get(numero, "?") for numero in numeros)
+
+
+def proceso_encriptacion():
+    separador("PROCESO DE ENCRIPTACIÓN RSA")
+
+    texto = input("Ingrese el texto a encriptar: ").upper()
+
+    if not validar_texto(texto):
+        print("\nError:")
+        print("Solo se permiten letras, Ñ y espacios.")
+        print("No se permiten números, emojis ni símbolos.")
+        return
+
     p = pedir_primo("p")
     q = pedir_primo("q")
-    if p == q:
-        print("\n  p y q tienen que ser distintos, no funciona con el mismo")
-        pausar()
-        return
-    try:
-        engine = RSAEngine(p, q)
-    except ValueError as err:
-        print(f"\n  error: {err}")
-        pausar()
-        return
-    k = engine.keys
-    print(f"\n  Primos          : p={k.p}, q={k.q}")
-    print(f"  Modulo          : n = {k.p} x {k.q} = {k.n}")
-    print(f"  Euler fi(n)     : ({k.p}-1)({k.q}-1) = {k.phi}")
-    print(f"  Exp. publico    : e = {k.e}")
-    print(f"  Exp. privado    : d = {k.d}")
-    print(f"  chunk size      : {engine.chunk_size} byte(s) por bloque")
-    print(f"\n  clave publica  ->  (n={k.n}, e={k.e})")
-    print(f"  clave privada  ->  (n={k.n}, d={k.d})")
-    # guardar estado
-    estado['engine'] = engine
-    estado['claves_listas'] = True
-    print("\n  listo, claves guardadas en sesion")
-    pausar()
+
+    while p == q:
+        print("p y q deben ser primos diferentes.")
+        q = pedir_primo("q")
+
+    n = p * q
+    phi = (p - 1) * (q - 1)
+
+    mensaje_numerico = texto_a_numeros(texto)
+
+    for m in mensaje_numerico:
+        if m >= n:
+            print("\nError:")
+            print(f"El valor M = {m} no puede cifrarse porque debe cumplirse M < n.")
+            print(f"Actualmente n = {n}. Usa primos más grandes.")
+            return
+
+    separador("1. CÁLCULO DE n Y φ(n)")
+    print(f"p = {p}")
+    print(f"q = {q}")
+    print(f"n = p × q = {p} × {q} = {n}")
+    print(f"φ(n) = ({p} - 1)({q} - 1) = {phi}")
+
+    separador("2. POSIBLES VALORES DE d")
+    posibles_d = obtener_posibles_d(phi)
+    print("Condición: 1 < d < φ(n) y MCD(d, φ(n)) = 1")
+    print(posibles_d)
+
+    d = random.choice(posibles_d)
+    print(f"\nSe selecciona d = {d}")
+
+    separador("3. CÁLCULO DE e")
+    e = mod_inverse(d, phi)
+    print(f"e × {d} ≡ 1 mod {phi}")
+    print(f"e = {e}")
+
+    separador("4. GENERACIÓN DE CLAVES")
+    print(f"Clave pública = (n, e) = ({n}, {e})")
+    print(f"Clave privada = (n, d) = ({n}, {d})")
+
+    separador("5. PROCESO DE ENCRIPTACIÓN")
+
+    bloques_cifrados = []
+    letras_cifradas = []
+
+    print(f"Texto original: {texto}")
+    print("\nMensaje original | Descripción                                      | Mensaje encriptado")
+    print("-" * 115)
+
+    for i, caracter in enumerate(texto, start=1):
+        m = TABLA[caracter]
+        c = mod_pow(m, e, n)
+        letra_cifrada = TABLA_INVERSA.get(c, "?")
+
+        bloques_cifrados.append(c)
+        letras_cifradas.append(letra_cifrada)
+
+        descripcion = f"Encripta con clave pública ({n}, {e})"
+
+        print(
+            f"{caracter} = {m:<3}         | "
+            f"{descripcion:<44} | "
+            f"C{i} ≡ {m}^{e} mod {n} = {c:<3} → {letra_cifrada}"
+        )
+
+    mensaje_cifrado_letras = "".join(letras_cifradas)
+
+    print("\nMensaje encriptado en números:")
+    print(bloques_cifrados)
+
+    print("\nMensaje encriptado en letras:")
+    print(mensaje_cifrado_letras)
+
+    separador("6. GUARDAR MENSAJE ENCRIPTADO")
+
+    contenido_txt = (
+        "MENSAJE ENCRIPTADO RSA\n\n"
+        f"Mensaje cifrado en letras:\n{mensaje_cifrado_letras}\n\n"
+        f"Mensaje cifrado en números:\n{bloques_cifrados}\n\n"
+        f"Clave privada para desencriptar:\n(n, d) = ({n}, {d})\n\n"
+        "Instrucción:\n"
+        "Para desencriptar, ingrese el mensaje cifrado y use la clave privada indicada.\n"
+    )
+
+    guardar = input("¿Desea guardar el mensaje encriptado en TXT? (s/n): ").lower()
+
+    if guardar == "s":
+        guardar_txt(contenido_txt)
 
 
-def opcion_cifrar(estado):
-    separador("CIFRAR MENSAJE")
+def proceso_desencriptacion():
+    separador("PROCESO DE DESENCRIPTACIÓN RSA")
 
-    if not estado.get('claves_listas'):
-        print("\n  primero genera las claves con la opcion 1")
-        pausar()
-        return
+    texto_cifrado = input("Ingrese el mensaje cifrado en letras: ").upper()
 
-    engine = estado['engine']
-    e, n = engine.keys.public_key
-    print(f"\n  usando clave publica (n={n}, e={e})")
-    print(f"  chunk size: {engine.chunk_size} byte(s)\n")
-
-    texto = input("  texto a cifrar: ")
-    if not texto.strip():
-        print("\n  el texto no puede estar vacio")
-        pausar()
-        return
-    try:
-        resultado = engine.encrypt(texto)
-    except ValueError as err:
-        print(f"\n  error al cifrar: {err}")
-        pausar()
-        return
-
-    # print bloque por bloque
-    print(f"\n  {'fragmento':<12} {'M (numero)':<14} {'C (cifrado)'}")
-    print("  " + "-" * 40)
-    for chunk, m, c in zip(resultado.chunks, resultado.numeric_blocks, resultado.cipher_blocks):
-        print(f"  {repr(chunk):<12} {m:<14} {c}")
-    estado['ultimo_cifrado'] = resultado.cipher_blocks
-    print(f"\n  resultado: {resultado.cipher_blocks}")
-    pausar()
-
-
-def opcion_descifrar(estado):
-    separador("DESCIFRAR MENSAJE")
-
-    if not estado.get('claves_listas'):
-        print("\n  genera las claves primero (opcion 1)")
-        pausar()
-        return
-
-    engine = estado['engine']
-    d, n = engine.keys.private_key
-    print(f"\n  usando clave privada (n={n}, d={d})\n")
-
-    if estado.get('ultimo_cifrado'):
-        usar = input("  usar el ultimo mensaje cifrado? (s/n): ").lower()
-        cifrados = estado['ultimo_cifrado'] if usar == 's' else pedir_lista_cifrados()
-    else:
-        cifrados = pedir_lista_cifrados()
-    if cifrados is None:
-        pausar()
-        return
-    try:
-        resultado = engine.decrypt(cifrados)
-    except ValueError as err:
-        print(f"\n  error al descifrar: {err}")
-        pausar()
-        return
-
-    # print bloque por bloque
-    print(f"\n  {'C (cifrado)':<14} {'M (numero)':<14} {'fragmento'}")
-    print("  " + "-" * 40)
-    for c, m, chunk in zip(resultado.cipher_blocks, resultado.numeric_blocks, resultado.chunks):
-        print(f"  {c:<14} {m:<14} {repr(chunk)}")
-    print(f"\n  mensaje original: {resultado.recovered_text}")
-    pausar()
-
-
-def pedir_lista_cifrados():
-    try:
-        raw = input("  ingresa los numeros cifrados separados por comas: ")
-        return [int(x.strip()) for x in raw.split(',')]
-    except ValueError:
-        print("\n  formato invalido, ejemplo: 9, 14, 11")
-        return None
-
-
-def opcion_ciclo_completo(estado):
-    # cifra y descifra en un paso, util para demo
-    separador("CICLO COMPLETO")
-
-    if not estado.get('claves_listas'):
-        print("\n  genera las claves primero (opcion 1)")
-        pausar()
-        return
-    texto = input("\n  texto a usar: ")
-    if not texto.strip():
-        print("\n  el texto no puede estar vacio")
-        pausar()
-        return
-    try:
-        reporte = estado['engine'].full_cycle(texto)
-    except ValueError as err:
-        print(f"\n  error: {err}")
-        pausar()
+    if not validar_texto(texto_cifrado):
+        print("\nError:")
+        print("Solo se permiten letras, Ñ y espacios.")
+        print("No se permiten números, emojis ni símbolos.")
         return
 
-    print(f"\n  original   : {reporte['original_text']}")
-    print(f"  cifrado    : {reporte['cipher_blocks']}")
-    print(f"  recuperado : {reporte['recovered_text']}")
-    print(f"  integridad : {'OK' if reporte['integrity_ok'] else 'FALLO'}")
-    pausar()
+    p = pedir_primo("p")
+    q = pedir_primo("q")
 
+    while p == q:
+        print("p y q deben ser primos diferentes.")
+        q = pedir_primo("q")
 
-def opcion_ver_estado(estado):
-    separador("ESTADO DE LA SESION")
-    if not estado.get('claves_listas'):
-        print("\n  todavia no hay claves generadas")
-    else:
-        k = estado['engine'].keys
-        print(f"\n  n  (modulo)       = {k.n}")
-        print(f"  e  (pub)          = {k.e}")
-        print(f"  d  (priv)         = {k.d}")
-        print(f"  chunk size        = {estado['engine'].chunk_size}")
-        if estado.get('ultimo_cifrado'):
-            print(f"  ultimo cifrado    = {estado['ultimo_cifrado']}")
+    n = p * q
+    phi = (p - 1) * (q - 1)
 
-    pausar()
+    mensaje_cifrado_numerico = texto_a_numeros(texto_cifrado)
 
+    for c in mensaje_cifrado_numerico:
+        if c >= n:
+            print("\nError:")
+            print(f"El valor C = {c} no puede desencriptarse porque debe cumplirse C < n.")
+            print(f"Actualmente n = {n}. Usa primos más grandes.")
+            return
 
-def opcion_limpiar(estado):
-    estado.clear()
-    print("\n  sesion limpia, como nuevo")
-    pausar()
+    separador("1. CÁLCULO DE n Y φ(n)")
+    print(f"p = {p}")
+    print(f"q = {q}")
+    print(f"n = p × q = {p} × {q} = {n}")
+    print(f"φ(n) = ({p} - 1)({q} - 1) = {phi}")
 
+    separador("2. POSIBLES VALORES DE d")
+    posibles_d = obtener_posibles_d(phi)
 
-# ----------------------
-# menu principal y loop
-# ----------------------
+    print("Condición: 1 < d < φ(n) y MCD(d, φ(n)) = 1")
+    print(posibles_d)
 
-def mostrar_menu():
-    separador("SISTEMA RSA  -  MA475 UPC")
-    print("""
-  [1] Generar claves RSA
-  [2] Cifrar mensaje
-  [3] Descifrar mensaje
-  [4] Ciclo completo (cifrar + descifrar)
-  [5] Ver estado de sesion
-  [6] Limpiar sesion
-  [0] Salir
-""")
-    separador()
+    d = random.choice(posibles_d)
+    print(f"\nSe selecciona d = {d}")
 
+    separador("3. CÁLCULO DE e")
+    e = mod_inverse(d, phi)
 
-def main():
-    estado = {}  # ultimo cifrado + engine de la sesion
+    print(f"e × {d} ≡ 1 mod {phi}")
+    print(f"e = {e}")
 
+    separador("4. GENERACIÓN DE CLAVES")
+    print(f"Clave pública = (n, e) = ({n}, {e})")
+    print(f"Clave privada = (n, d) = ({n}, {d})")
+
+    separador("5. PROCESO DE DESENCRIPTACIÓN")
+
+    bloques_descifrados = []
+    letras_descifradas = []
+
+    print(f"Mensaje cifrado: {texto_cifrado}")
+    print("\nMensaje recibido | Descripción                                      | Mensaje desencriptado")
+    print("-" * 115)
+
+    for i, caracter in enumerate(texto_cifrado, start=1):
+        c = TABLA[caracter]
+        m = mod_pow(c, d, n)
+        letra = TABLA_INVERSA.get(m, "?")
+
+        bloques_descifrados.append(m)
+        letras_descifradas.append(letra)
+
+        descripcion = f"Desencripta con clave privada ({n}, {d})"
+
+        print(
+            f"{caracter} = {c:<3}        | "
+            f"{descripcion:<44} | "
+            f"M{i} ≡ {c}^{d} mod {n} = {m:<3} → {letra}"
+        )
+
+    mensaje_desencriptado = "".join(letras_descifradas)
+
+    print("\nMensaje recibido en números:")
+    print(mensaje_cifrado_numerico)
+
+    print("\nMensaje desencriptado en números:")
+    print(bloques_descifrados)
+
+    print("\nMensaje desencriptado en letras:")
+    print(mensaje_desencriptado)
+
+    separador("6. GUARDAR MENSAJE DESENCRIPTADO")
+
+    contenido_txt = (
+        "MENSAJE DESENCRIPTADO RSA\n\n"
+        f"Mensaje cifrado recibido:\n{texto_cifrado}\n\n"
+        f"Mensaje cifrado en números:\n{mensaje_cifrado_numerico}\n\n"
+        f"Clave privada utilizada:\n(n, d) = ({n}, {d})\n\n"
+        f"Mensaje desencriptado:\n{mensaje_desencriptado}\n"
+    )
+
+    guardar = input("¿Desea guardar el mensaje desencriptado en TXT? (s/n): ").lower()
+
+    if guardar == "s":
+        guardar_txt(contenido_txt)
+
+def menu():
     while True:
-        limpiar_pantalla()
-        mostrar_menu()
-        opcion = input("  opcion: ").strip()
-        if opcion == '1':
-            opcion_generar_claves(estado)
-        elif opcion == '2':
-            opcion_cifrar(estado)
-        elif opcion == '3':
-            opcion_descifrar(estado)
-        elif opcion == '4':
-            opcion_ciclo_completo(estado)
-        elif opcion == '5':
-            opcion_ver_estado(estado)
-        elif opcion == '6':
-            opcion_limpiar(estado)
-        elif opcion == '0':
-            print("\n  chau!\n")
+        separador("MENÚ PRINCIPAL - CRIPTOGRAFÍA RSA")
+        print("[1] Encriptación")
+        print("[2] Desencriptación")
+        print("[0] Salir")
+
+        opcion = input("\nSeleccione una opción: ").strip()
+
+        if opcion == "1":
+            proceso_encriptacion()
+            pausar()
+        elif opcion == "2":
+            proceso_desencriptacion()
+            pausar()
+        elif opcion == "0":
+            print("\nPrograma finalizado.")
             break
         else:
-            print("\n  esa opcion no existe")
+            print("Opción inválida.")
             pausar()
 
 
 if __name__ == "__main__":
-    main()
+    menu()
